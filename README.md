@@ -17,6 +17,16 @@ npm install
 npm run dev                  # http://localhost:3000
 ```
 
+## Login y registro (Clerk)
+
+El registro, el ingreso, la verificación por mail y la recuperación de contraseña los maneja [Clerk](https://clerk.com) (gratis hasta ~10.000 usuarios activos por mes).
+
+1. Creá una app en https://dashboard.clerk.com y copiá `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` y `CLERK_SECRET_KEY` a `.env.local`.
+2. Definí quién puede usar la app en `APP_EMAILS_PERMITIDOS`: mails completos y/o dominios con `@` (ej. `ana@estudio.com,@miempresa.com.ar`). Cualquiera puede registrarse, pero quien no esté en la lista ve "Tu cuenta todavía no tiene acceso".
+3. Solo cuentan los mails **verificados**. Los cambios en la lista tardan hasta 5 minutos en aplicarse a una sesión abierta.
+
+Para entrar con Google u otros proveedores, activalos en el dashboard de Clerk (User & authentication → SSO connections); no hace falta tocar el código.
+
 ## Cambiar de modelo
 
 Todos los modelos están en `lib/models.ts`. Se elige desde la interfaz, y el valor por defecto se define con `DEFAULT_MODEL`.
@@ -63,7 +73,8 @@ lib/extract.ts                 prompt + llamada al modelo + reintento
 lib/validate.ts, lib/qr.ts     validaciones y QR fiscal
 lib/arca/                      WSAA (login) + WSCDC (constatación)
 lib/client/preprocess.ts       PDF→imagen y lectura del QR en el navegador
-lib/export.ts                  CSV y XLSX
+lib/export.ts                  CSV y XLSX (columnas configurables)
+lib/auth/, proxy.ts            login con Clerk + whitelist de mails
 scripts/bench.ts               comparativa de modelos
 ```
 

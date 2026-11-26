@@ -1,3 +1,4 @@
+import { exigirAcceso } from "@/lib/auth/acceso";
 import { senalesConModelo } from "@/lib/senales-modelo";
 import type { Imagen } from "@/lib/extract";
 import { getModeloConfig } from "@/lib/models";
@@ -10,6 +11,8 @@ const MAX_BYTES = 4 * 1024 * 1024;
 // POST multipart/form-data: modelo, imagenes (1..20 páginas, image/*).
 // Devuelve { senales: SenalesPagina[], costoUsd } en el mismo orden que las imágenes.
 export async function POST(req: Request) {
+  const sinAcceso = await exigirAcceso();
+  if (sinAcceso) return sinAcceso;
   try {
     const form = await req.formData();
     const modelo = String(form.get("modelo") ?? "");

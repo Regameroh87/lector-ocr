@@ -1,3 +1,4 @@
+import { exigirAcceso } from "@/lib/auth/acceso";
 import { extraerFactura, type Imagen } from "@/lib/extract";
 import { parseQrFiscal, type QrFiscal } from "@/lib/qr";
 import { aplicarQr, compararConQr, corregirCuitsConTexto, validarFactura } from "@/lib/validate";
@@ -16,6 +17,8 @@ const MAX_TEXTO = 30_000;
 // campos (JSON con campos personalizados, opcional), texto (capa de texto del PDF, opcional),
 // imagenes (1..5 archivos image/*)
 export async function POST(req: Request) {
+  const sinAcceso = await exigirAcceso();
+  if (sinAcceso) return sinAcceso;
   try {
     const form = await req.formData();
     const modelo = String(form.get("modelo") ?? "");

@@ -1,3 +1,4 @@
+import { exigirAcceso } from "@/lib/auth/acceso";
 import { connection } from "next/server";
 import { Factura } from "@/lib/schema";
 import { verificarEnArca, arcaHabilitadaEnServidor } from "@/lib/arca/verificar";
@@ -7,6 +8,8 @@ import type { EstadoServidorArca } from "@/lib/types";
 
 // Estado de la integración (para el panel de Configuración). No expone datos del certificado.
 export async function GET() {
+  const sinAcceso = await exigirAcceso();
+  if (sinAcceso) return sinAcceso;
   await connection(); // leer env en cada request, no en el build
   const body: EstadoServidorArca = { habilitada: arcaHabilitadaEnServidor(), configurada: false, entorno: null };
   try {
@@ -23,6 +26,8 @@ export async function GET() {
 
 // Verificación manual (después de corregir datos, o con la verificación automática apagada).
 export async function POST(req: Request) {
+  const sinAcceso = await exigirAcceso();
+  if (sinAcceso) return sinAcceso;
   const body = await req.json().catch(() => null);
   const parsed = Factura.safeParse(body?.factura);
   if (!parsed.success) return Response.json({ error: "Factura inválida" }, { status: 400 });

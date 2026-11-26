@@ -13,6 +13,8 @@
     "arca:test": "tsx scripts/arca-test.ts"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.28.0",
+    "@clerk/nextjs": "^7.10.10",
     "@openrouter/ai-sdk-provider": "^3.1.0",
     "ai": "^7.0.181",
     "exceljs": "^4.4.0",

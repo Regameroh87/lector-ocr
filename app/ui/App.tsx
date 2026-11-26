@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FileSpreadsheet, FileText, Play, Settings2, Trash2, Upload } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 import type { ModeloConfig } from "@/lib/models";
 import type { Factura } from "@/lib/schema";
 import type { RespuestaExtraccion, EstadoServidorArca } from "@/lib/types";
@@ -53,6 +55,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   const camposActivos = campos.filter((c) => c.nombre.trim());
   const [columnas, setColumnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
   const [servidorArca, setServidorArca] = useState<EstadoServidorArca | null>(null);
+  const router = useRouter();
 
   const activos = useRef(0);
   const cola = useRef<{ id: string; modelo: string; arca: boolean }[]>([]);
@@ -92,6 +95,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         if (pedidos.length) fd.set("campos", JSON.stringify(pedidos.map(({ nombre, descripcion, tipo }) => ({ nombre, descripcion, tipo }))));
         pre.imagenes.forEach((b, i) => fd.append("imagenes", b, `pagina-${i + 1}.jpg`));
         const r = await fetch("/api/extract", { method: "POST", body: fd });
+        if (r.status === 401) router.push("/sign-in"); // la sesión venció
         const json = await r.json();
         if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
         actualizar(id, { estado: "listo", res: json as RespuestaExtraccion, modeloEnCurso: undefined });
@@ -101,7 +105,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         actualizar(id, (f) => ({ estado: f.res ? "listo" : "error", error, modeloEnCurso: undefined }));
       }
     },
-    [actualizar],
+    [actualizar, router],
   );
 
   const arrancarTrabajadores = useCallback(() => {
@@ -358,6 +362,8 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 </button>
               </>
             )}
+            <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
+            <UserButton />
           </div>
         </div>
         {cfg?.gratis && (
