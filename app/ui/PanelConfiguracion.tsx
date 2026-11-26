@@ -2,9 +2,12 @@
 
 import type { EstadoServidorArca } from "@/lib/types";
 import type { CampoPersonalizado } from "@/lib/campos";
+import { claveDe } from "@/lib/campos";
+import type { ConfigColumnas } from "@/lib/export";
 import EditorCampos from "./EditorCampos";
+import EditorColumnas from "./EditorColumnas";
 
-export default function PanelConfiguracion({ verificarArca, setVerificarArca, extraerAuto, setExtraerAuto, servidor, campos, setCampos }: {
+export default function PanelConfiguracion({ verificarArca, setVerificarArca, extraerAuto, setExtraerAuto, servidor, campos, setCampos, columnas, setColumnas }: {
   verificarArca: boolean;
   setVerificarArca: (v: boolean) => void;
   extraerAuto: boolean;
@@ -12,6 +15,8 @@ export default function PanelConfiguracion({ verificarArca, setVerificarArca, ex
   servidor: EstadoServidorArca | null;
   campos: CampoPersonalizado[];
   setCampos: (c: CampoPersonalizado[]) => void;
+  columnas: ConfigColumnas | null;
+  setColumnas: (c: ConfigColumnas | null) => void;
 }) {
   const bloqueado = servidor?.habilitada === false;
   let estado: { txt: string; cls: string };
@@ -42,6 +47,11 @@ export default function PanelConfiguracion({ verificarArca, setVerificarArca, ex
           nota={estado}
         />
         <EditorCampos campos={campos} onCambiar={setCampos} />
+        <EditorColumnas
+          config={columnas}
+          onCambiar={setColumnas}
+          extras={campos.filter((c) => c.nombre.trim()).map((c) => ({ clave: claveDe(c.nombre), nombre: c.nombre.trim() }))}
+        />
         <p className="pt-3 text-xs text-zinc-500">Se aplica a lo que proceses a partir de ahora y se guarda en este navegador.</p>
       </div>
     </section>

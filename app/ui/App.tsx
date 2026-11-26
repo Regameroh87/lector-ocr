@@ -10,10 +10,11 @@ import { validarFactura } from "@/lib/validate";
 import { esPdf, leerPdf, preprocesarImagen } from "@/lib/client/preprocess";
 import { paginasParaExtraer, separarPdf } from "@/lib/client/separar";
 import { rangoPaginas } from "@/lib/segmentar";
-import { toCSV, toXLSX, type FilaExport } from "@/lib/export";
+import { toCSV, toXLSX, type ConfigColumnas, type FilaExport } from "@/lib/export";
 import { usePreferenciaBooleana, usePreferenciaJson } from "@/lib/client/preferencias";
 import type { CampoPersonalizado } from "@/lib/campos";
 import { validarCampos } from "./EditorCampos";
+import { validarConfigColumnas } from "./EditorColumnas";
 import { paginasTxt, type Fila } from "./comun";
 import ListaDocumentos from "./ListaDocumentos";
 import Visor from "./Visor";
@@ -50,6 +51,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   const [extraerAuto, setExtraerAuto] = usePreferenciaBooleana("extraerAuto", false);
   const [campos, setCampos] = usePreferenciaJson<CampoPersonalizado[]>("camposPersonalizados", SIN_CAMPOS, validarCampos);
   const camposActivos = campos.filter((c) => c.nombre.trim());
+  const [columnas, setColumnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
   const [servidorArca, setServidorArca] = useState<EstadoServidorArca | null>(null);
 
   const activos = useRef(0);
@@ -84,6 +86,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         const fd = new FormData();
         fd.set("modelo", modeloId);
         if (pre.qr) fd.set("qr", pre.qr);
+        if (pre.texto) fd.set("texto", pre.texto);
         fd.set("arca", arca ? "1" : "0");
         const pedidos = actuales.current.campos;
         if (pedidos.length) fd.set("campos", JSON.stringify(pedidos.map(({ nombre, descripcion, tipo }) => ({ nombre, descripcion, tipo }))));
@@ -171,7 +174,11 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
             original,
             estado: "esperando",
             paginas: pags.map((p) => p.url),
-            pre: { imagenes: enviar.map((p) => p.imagen), qr: pags.find((p) => p.qr)?.qr ?? null },
+            pre: {
+              imagenes: enviar.map((p) => p.imagen),
+              qr: pags.find((p) => p.qr)?.qr ?? null,
+              texto: pags.map((p) => p.texto.trim()).filter(Boolean).join("\n\n") || null,
+            },
             paginasOrigen: varios ? g : undefined,
             nota: notas.join(" ") || undefined,
             costoSeparacion: k === 0 && sep.costoUsd ? sep.costoUsd : undefined,
@@ -327,7 +334,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
                 <button
                   disabled={!conDatos.length}
-                  onClick={() => descargar(`facturas-${hoy()}.csv`, toCSV(exportables), "text/csv;charset=utf-8")}
+                  onClick={() => descargar(`facturas-${hoy()}.csv`, toCSV(exportables, columnas), "text/csv;charset=utf-8")}
                   className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-2.5 text-[13px] text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-900 disabled:opacity-40"
                 >
                   <FileText className="size-4" />
@@ -335,7 +342,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 </button>
                 <button
                   disabled={!conDatos.length}
-                  onClick={async () => descargar(`facturas-${hoy()}.xlsx`, await toXLSX(exportables), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+                  onClick={async () => descargar(`facturas-${hoy()}.xlsx`, await toXLSX(exportables, columnas), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
                   className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-zinc-300 bg-white px-2.5 text-[13px] text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-900 disabled:opacity-40"
                 >
                   <FileSpreadsheet className="size-4" />
@@ -369,6 +376,8 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
           servidor={servidorArca}
           campos={campos}
           setCampos={setCampos}
+          columnas={columnas}
+          setColumnas={setColumnas}
         />
       )}
 

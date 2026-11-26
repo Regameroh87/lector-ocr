@@ -3,7 +3,7 @@ import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
 import { claveDe, esquemaExtras, normalizarCampos } from "../lib/campos";
 import { extraerFactura } from "../lib/extract";
-import { columnas, toCSV, type FilaExport } from "../lib/export";
+import { catalogo, columnas, COLUMNAS, toCSV, type ConfigColumnas, type FilaExport } from "../lib/export";
 import { Factura } from "../lib/schema";
 
 const base: z.infer<typeof Factura> = {
@@ -55,5 +55,34 @@ describe("campos personalizados", () => {
     const cols = columnas([fila]).map((c) => c.titulo);
     expect(cols.indexOf("Orden de compra")).toBe(cols.indexOf("Estado ARCA") - 1);
     expect(toCSV([fila])).toContain("OC-77");
+  });
+});
+
+describe("configuración de columnas", () => {
+  const campos = normalizarCampos([{ nombre: "Orden de compra" }]);
+  const fila: FilaExport = { archivo: "a.pdf", modelo: "m", factura: { ...base, extras: { orden_de_compra: "OC-77" } }, campos, advertencias: [], arca: null, costoUsd: null };
+  const todas = catalogo([{ clave: "orden_de_compra", nombre: "Orden de compra" }]).map((c) => c.id);
+
+  it("respeta columnas elegidas y su orden", () => {
+    const cfg: ConfigColumnas = { visibles: ["total", "fecha", "extra:orden_de_compra"], conocidas: todas, hojaItems: false };
+    expect(columnas([fila], cfg).map((c) => c.titulo)).toEqual(["Total", "Fecha", "Orden de compra"]);
+    const csv = toCSV([fila], cfg).split("\r\n");
+    expect(csv[0]).toBe("﻿Total;Fecha;Orden de compra");
+  });
+
+  it("un campo personalizado nuevo se agrega al final", () => {
+    const cfg: ConfigColumnas = { visibles: ["fecha"], conocidas: COLUMNAS.map((c) => c.id), hojaItems: true };
+    expect(columnas([fila], cfg).map((c) => c.id)).toEqual(["fecha", "extra:orden_de_compra"]);
+  });
+
+  it("ignora columnas que ya no existen", () => {
+    const cfg: ConfigColumnas = { visibles: ["fecha", "extra:borrado"], conocidas: [...todas, "extra:borrado"], hojaItems: true };
+    expect(columnas([fila], cfg).map((c) => c.id)).toEqual(["fecha"]);
+  });
+
+  it("sin configuración salen todas menos IVA total", () => {
+    const ids = columnas([fila]).map((c) => c.id);
+    expect(ids).not.toContain("ivaTotal");
+    expect(ids).toContain("cae");
   });
 });

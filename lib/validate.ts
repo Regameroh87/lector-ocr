@@ -122,3 +122,47 @@ export function aplicarQr(f: Factura, qr: QrFiscal): Factura {
     cotizacion: qr.ctz !== 1 ? qr.ctz : f.cotizacion,
   };
 }
+
+/** CUITs con dígito verificador válido que aparecen en un texto ("30-71234567-8", "30712345678"). */
+export function cuitsEnTexto(texto: string): string[] {
+  const out = new Set<string>();
+  for (const m of texto.matchAll(/(?<!\d)(\d{2})[\s.-]?(\d{8})[\s.-]?(\d)(?!\d)/g)) {
+    const c = m[1] + m[2] + m[3];
+    if (cuitValido(c)) out.add(c);
+  }
+  return [...out];
+}
+
+function distancia(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+
+/**
+ * Si el modelo leyó mal un CUIT (le falta/sobra/cambió un dígito) y el PDF tiene capa de texto,
+ * lo reemplaza por el CUIT válido del texto más parecido (a lo sumo 2 cambios).
+ */
+export function corregirCuitsConTexto(f: Factura, texto: string | null | undefined): { factura: Factura; avisos: Advertencia[] } {
+  if (!texto || !esArgentina(f)) return { factura: f, avisos: [] };
+  const candidatos = cuitsEnTexto(texto);
+  const avisos: Advertencia[] = [];
+  let factura = f;
+  for (const parte of ["emisor", "receptor"] as const) {
+    const leido = factura[parte].idFiscal?.replace(/\D/g, "") ?? "";
+    if (!leido || cuitValido(leido)) continue;
+    const otro = parte === "emisor" ? factura.receptor.idFiscal : factura.emisor.idFiscal;
+    const opciones = candidatos
+      .filter((c) => c !== otro?.replace(/\D/g, ""))
+      .map((c) => ({ c, d: distancia(leido, c) }))
+      .filter((x) => x.d <= 2)
+      .sort((a, b) => a.d - b.d);
+    // Solo si hay un único candidato más cercano (si empatan dos, no adivinar).
+    if (!opciones.length || (opciones[1] && opciones[1].d === opciones[0].d)) continue;
+    factura = { ...factura, [parte]: { ...factura[parte], idFiscal: opciones[0].c } };
+    avisos.push({ campo: `${parte}.idFiscal`, nivel: "aviso", mensaje: `El modelo leyó "${leido}" (inválido); se corrigió a ${opciones[0].c} con el texto del PDF` });
+  }
+  return { factura, avisos };
+}

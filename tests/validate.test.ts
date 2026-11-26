@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cuitValido, validarFactura, aplicarQr } from "../lib/validate";
+import { cuitValido, validarFactura, aplicarQr, corregirCuitsConTexto, cuitsEnTexto } from "../lib/validate";
 import { parseQrFiscal } from "../lib/qr";
 import type { Factura } from "../lib/schema";
 
@@ -85,5 +85,33 @@ describe("QR fiscal", () => {
     const adv = validarFactura(base, qr);
     expect(adv.some((a) => a.campo === "total" && a.mensaje.includes("QR"))).toBe(true);
     expect(aplicarQr(base, qr).total).toBe(1250);
+  });
+});
+
+describe("corregirCuitsConTexto", () => {
+  const texto = "Razón Social: X SA  CUIT: 33-69345023-9  Ingresos Brutos: 123  CUIT cliente: 20-12345678-6";
+
+  it("encuentra CUITs válidos en el texto con o sin guiones", () => {
+    expect(cuitsEnTexto(texto)).toContain("33693450239");
+    expect(cuitsEnTexto("30712345678 y 33693450239")).toEqual(["33693450239"]); // el primero no es válido
+  });
+
+  it("corrige un CUIT al que el modelo le comió un dígito", () => {
+    const leida = { ...base, emisor: { ...base.emisor, idFiscal: "3369345239" } };
+    const { factura, avisos } = corregirCuitsConTexto(leida, texto);
+    expect(factura.emisor.idFiscal).toBe("33693450239");
+    expect(avisos[0].campo).toBe("emisor.idFiscal");
+    expect(validarFactura(factura).some((a) => a.campo === "emisor.idFiscal")).toBe(false);
+  });
+
+  it("no toca un CUIT válido ni corrige sin texto", () => {
+    expect(corregirCuitsConTexto(base, texto).avisos).toEqual([]);
+    const leida = { ...base, emisor: { ...base.emisor, idFiscal: "3369345239" } };
+    expect(corregirCuitsConTexto(leida, null).factura.emisor.idFiscal).toBe("3369345239");
+  });
+
+  it("no adivina si el CUIT leído está lejos de todos los del texto", () => {
+    const leida = { ...base, emisor: { ...base.emisor, idFiscal: "11111111111" } };
+    expect(corregirCuitsConTexto(leida, texto).factura.emisor.idFiscal).toBe("11111111111");
   });
 });

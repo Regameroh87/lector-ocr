@@ -9,41 +9,86 @@ export interface Preprocesado {
 
 const MAX_LADO = 2000; // px del lado mayor enviado al modelo
 const MAX_PAGINAS_PDF = 300;
+const ALTA_RES = 5000; // px del lado mayor para buscar el QR si no apareció a resolución normal
 
 function canvasABlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((ok, mal) => canvas.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo generar la imagen"))), "image/jpeg", 0.9));
 }
 
-function escanear(canvas: HTMLCanvasElement): string | null {
+/** Solo interesa el QR fiscal de ARCA/AFIP; otros QR (Mercado Pago, links de pago) se ignoran. */
+const esQrFiscal = (t: string) => /(afip|arca)\.gob\.ar/i.test(t);
+
+type Detector = { detect(fuente: CanvasImageSource): Promise<{ rawValue: string }[]> };
+let detector: Detector | null | undefined;
+
+/** BarcodeDetector nativo del navegador (Chrome/Edge): más rápido y robusto que jsQR con QR chicos. */
+async function conDetectorNativo(canvas: HTMLCanvasElement): Promise<string | null> {
+  if (detector === undefined) {
+    const BD = (globalThis as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
+    try {
+      detector = BD ? new BD({ formats: ["qr_code"] }) : null;
+    } catch {
+      detector = null;
+    }
+  }
+  if (!detector) return null;
+  try {
+    const r = await detector.detect(canvas);
+    return r.map((x) => x.rawValue).find(esQrFiscal) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function jsqrEn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): string | null {
+  const r = jsQR(ctx.getImageData(x, y, w, h).data, w, h, { inversionAttempts: "attemptBoth" });
+  return r?.data && esQrFiscal(r.data) ? r.data : null;
+}
+
+/**
+ * jsQR devuelve un solo código por llamada y falla con QR chicos en páginas grandes:
+ * se prueba la imagen entera y después una grilla de 3×3 ventanas solapadas (mitad de ancho y alto).
+ */
+function conJsqr(canvas: HTMLCanvasElement): string | null {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  const { width, height } = canvas;
-  const r = jsQR(ctx.getImageData(0, 0, width, height).data, width, height, { inversionAttempts: "attemptBoth" });
-  if (r?.data) return r.data;
-  // QR chico en una página grande: probar por cuadrantes
-  const mw = Math.ceil(width / 2);
-  const mh = Math.ceil(height / 2);
-  for (const [x, y] of [[0, mh], [mw, mh], [0, 0], [mw, 0]]) {
-    const w = Math.min(mw, width - x);
-    const h = Math.min(mh, height - y);
-    const q = jsQR(ctx.getImageData(x, y, w, h).data, w, h, { inversionAttempts: "attemptBoth" });
-    if (q?.data) return q.data;
+  const { width: W, height: H } = canvas;
+  const entero = jsqrEn(ctx, 0, 0, W, H);
+  if (entero) return entero;
+  const w = Math.ceil(W / 2);
+  const h = Math.ceil(H / 2);
+  // El QR de ARCA suele ir abajo: primero las ventanas inferiores.
+  for (const fy of [1, 0.5, 0]) {
+    for (const fx of [0, 0.5, 1]) {
+      const x = Math.round((W - w) * fx);
+      const y = Math.round((H - h) * fy);
+      const q = jsqrEn(ctx, x, y, w, h);
+      if (q) return q;
+    }
   }
   return null;
 }
 
-function leerQr(canvas: HTMLCanvasElement): string | null {
-  const directo = escanear(canvas);
-  if (directo) return directo;
-  // Imágenes de baja resolución (capturas, fotos chicas): reintentar ampliando.
-  const factor = Math.min(3, Math.floor(3000 / Math.max(canvas.width, canvas.height)));
-  if (factor < 2) return null;
-  const grande = document.createElement("canvas");
-  grande.width = canvas.width * factor;
-  grande.height = canvas.height * factor;
-  const ctx = grande.getContext("2d", { willReadFrequently: true })!;
+function ampliado(canvas: HTMLCanvasElement, factor: number): HTMLCanvasElement {
+  const g = canvasNuevo(Math.round(canvas.width * factor), Math.round(canvas.height * factor));
+  const ctx = g.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(canvas, 0, 0, grande.width, grande.height);
-  return escanear(grande);
+  ctx.drawImage(canvas, 0, 0, g.width, g.height);
+  return g;
+}
+
+/** Busca el QR fiscal: detector nativo, después jsQR por ventanas y, si la imagen es chica, ampliada. */
+async function leerQr(canvas: HTMLCanvasElement, { ampliar = true } = {}): Promise<string | null> {
+  const nativo = await conDetectorNativo(canvas);
+  if (nativo) return nativo;
+  const directo = conJsqr(canvas);
+  if (directo || !ampliar) return directo;
+  // Capturas o fotos chicas: reintentar al doble (o triple) de tamaño.
+  const factor = Math.min(3, Math.max(2, Math.floor(4000 / Math.max(canvas.width, canvas.height))));
+  if (Math.max(canvas.width, canvas.height) * factor > 6000) return null;
+  const g = ampliado(canvas, factor);
+  const r = (await conDetectorNativo(g)) ?? conJsqr(g);
+  g.width = g.height = 0;
+  return r;
 }
 
 function canvasNuevo(w: number, h: number): HTMLCanvasElement {
@@ -76,7 +121,7 @@ async function desdeImagen(file: File): Promise<Preprocesado> {
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.drawImage(bitmap, 0, 0);
-  const qr = leerQr(c);
+  const qr = await leerQr(c);
   const blob = await canvasABlob(redimensionar(c));
   return { imagenes: [blob], qr, paginas: [URL.createObjectURL(blob)] };
 }
@@ -107,7 +152,18 @@ export async function leerPdf(file: File, onProgreso?: (hechas: number, total: n
       const contenido = await page.getTextContent();
       const texto = contenido.items.map((it) => ("str" in it ? it.str : "")).join(" ");
       const imagen = await canvasABlob(c);
-      paginas.push({ imagen, url: URL.createObjectURL(imagen), qr: leerQr(c), texto });
+      let qr = await leerQr(c, { ampliar: false });
+      if (!qr && (!texto.trim() || /C\.?\s?A\.?\s?E/i.test(texto))) {
+        // El QR de ARCA es chico y denso: volver a renderizar la página en alta resolución.
+        // (En PDFs digitales da detalle real; en escaneos equivale a ampliar la imagen.)
+        const escala = Math.min(8, ALTA_RES / Math.max(base.width, base.height));
+        const vp = page.getViewport({ scale: escala });
+        const g = canvasNuevo(Math.round(vp.width), Math.round(vp.height));
+        await page.render({ canvas: g, viewport: vp, background: "#ffffff" }).promise;
+        qr = await leerQr(g, { ampliar: false });
+        g.width = g.height = 0;
+      }
+      paginas.push({ imagen, url: URL.createObjectURL(imagen), qr, texto });
       page.cleanup();
       c.width = c.height = 0; // liberar memoria del canvas
     }

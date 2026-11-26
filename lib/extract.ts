@@ -49,6 +49,16 @@ Reglas:
 - "iva": una entrada por cada alícuota discriminada. Si el IVA no está discriminado (típico en B y C), dejá el array vacío.
 - Si hay varias páginas, son del mismo comprobante.`;
 
+/** Capa de texto de un PDF digital: los caracteres son exactos, evita errores de lectura en CUIT, CAE e importes. */
+function instruccionesTexto(texto?: string | null): string {
+  if (!texto?.trim()) return "";
+  return `Este es el texto que trae el PDF (extraído digitalmente, sin errores de lectura, aunque sin el orden visual).
+Usalo para copiar exactamente números como CUIT, CAE, punto de venta, número e importes; la imagen manda para entender qué es cada dato.
+<texto_pdf>
+${texto}
+</texto_pdf>`;
+}
+
 function instruccionesJsonSinSchema(schema: z.ZodType): string {
   const json = JSON.stringify(z.toJSONSchema(schema));
   return `Respondé únicamente con un objeto JSON válido (sin texto extra ni markdown) que cumpla este JSON Schema:\n${json}`;
@@ -57,12 +67,12 @@ function instruccionesJsonSinSchema(schema: z.ZodType): string {
 export async function extraerFactura(
   imagenes: Imagen[],
   modeloId: string,
-  opciones: { model?: LanguageModel; campos?: CampoExtraido[] } = {},
+  opciones: { model?: LanguageModel; campos?: CampoExtraido[]; texto?: string | null } = {},
 ): Promise<ResultadoExtraccion> {
   const cfg = getModeloConfig(modeloId);
   const campos = opciones.campos ?? [];
   const schema = campos.length ? Factura.extend({ extras: esquemaExtras(campos) }) : Factura;
-  const pedido = ["Extraé los datos de este comprobante.", instruccionesCampos(campos)].filter(Boolean).join("\n\n");
+  const pedido = ["Extraé los datos de este comprobante.", instruccionesCampos(campos), instruccionesTexto(opciones.texto)].filter(Boolean).join("\n\n");
   const model = opciones.model ?? getModel(cfg);
   const t0 = Date.now();
   let modo: "estricto" | "json" = cfg.structuredOutputs && !sinEsquemaEstricto.has(modeloId) ? "estricto" : "json";

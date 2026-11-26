@@ -1,6 +1,6 @@
 import { extraerFactura, type Imagen } from "@/lib/extract";
 import { parseQrFiscal, type QrFiscal } from "@/lib/qr";
-import { aplicarQr, validarFactura } from "@/lib/validate";
+import { aplicarQr, compararConQr, corregirCuitsConTexto, validarFactura } from "@/lib/validate";
 import { verificarEnArca, ARCA_DESACTIVADA_USUARIO } from "@/lib/arca/verificar";
 import { getModeloConfig } from "@/lib/models";
 import { normalizarCampos } from "@/lib/campos";
@@ -10,9 +10,11 @@ export const maxDuration = 120;
 
 const MAX_IMAGENES = 5;
 const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_TEXTO = 30_000;
 
 // POST multipart/form-data: modelo, qr (texto crudo del QR, opcional), arca ("0" para no verificar),
-// campos (JSON con campos personalizados, opcional), imagenes (1..5 archivos image/*)
+// campos (JSON con campos personalizados, opcional), texto (capa de texto del PDF, opcional),
+// imagenes (1..5 archivos image/*)
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
@@ -47,11 +49,16 @@ export async function POST(req: Request) {
       }
     }
 
-    const r = await extraerFactura(imagenes, modelo, { campos });
-    // Advertencias se calculan sobre lo que leyó el modelo (para ver dónde difiere del QR);
-    // la factura que se devuelve ya tiene los datos del QR aplicados.
-    const advertencias = validarFactura(r.factura, qr);
-    const factura = qr ? aplicarQr(r.factura, qr) : r.factura;
+    const textoForm = form.get("texto");
+    const texto = typeof textoForm === "string" && textoForm.trim() ? textoForm.slice(0, MAX_TEXTO) : null;
+
+    const r = await extraerFactura(imagenes, modelo, { campos, texto });
+    // Correcciones: primero el QR (exacto), después CUITs mal leídos contra el texto del PDF.
+    const conQr = qr ? aplicarQr(r.factura, qr) : r.factura;
+    const { factura, avisos } = corregirCuitsConTexto(conQr, texto);
+    // Validación sobre la factura final (no marcar como error algo que ya se corrigió)
+    // + dónde difería el modelo del QR.
+    const advertencias = [...validarFactura(factura), ...avisos, ...(qr ? compararConQr(r.factura, qr) : [])];
     const arca = form.get("arca") === "0" ? ARCA_DESACTIVADA_USUARIO : await verificarEnArca(factura, qr);
 
     const body: RespuestaExtraccion = {

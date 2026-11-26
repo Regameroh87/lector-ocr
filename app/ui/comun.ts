@@ -17,7 +17,7 @@ export interface Fila {
   /** object URLs de las páginas renderizadas */
   paginas?: string[];
   /** imágenes listas para enviar al modelo + QR leído (se reutilizan al re-extraer) */
-  pre?: { imagenes: Blob[]; qr: string | null };
+  pre?: { imagenes: Blob[]; qr: string | null; texto?: string | null };
   /** modelo elegido para la próxima extracción de este comprobante */
   modelo?: string;
   /** modelo con el que se está extrayendo ahora */
