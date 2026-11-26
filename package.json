@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "node -e \"require('fs').copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','public/pdf.worker.min.mjs')\"",
+    "postinstall": "node scripts/copiar-worker.mjs",
     "test": "vitest run",
     "bench": "tsx scripts/bench.ts",
     "arca:test": "tsx scripts/arca-test.ts"
@@ -37,5 +37,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
