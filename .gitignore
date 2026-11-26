@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+public/pdf.worker.min.mjs
+
+# proyecto
+!.env.example
+certs/
+bench/*
+!bench/README.md
