@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileSpreadsheet, FileText, Play, Settings2, Trash2, Upload } from "lucide-react";
+import { FileSpreadsheet, FileText, Play, Settings2, Trash2, Upload, Users } from "lucide-react";
+import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import type { ModeloConfig } from "@/lib/models";
 import type { Factura } from "@/lib/schema";
@@ -56,6 +57,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   const [columnas, setColumnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
   const [servidorArca, setServidorArca] = useState<EstadoServidorArca | null>(null);
   const router = useRouter();
+  const [esAdmin, setEsAdmin] = useState(false);
 
   const activos = useRef(0);
   const cola = useRef<{ id: string; modelo: string; arca: boolean }[]>([]);
@@ -65,6 +67,13 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   useEffect(() => {
     actuales.current = { modelo, extraerAuto, verificarArca, campos: camposActivos };
   });
+
+  useEffect(() => {
+    fetch("/api/yo")
+      .then((r) => r.json())
+      .then((y: { admin?: boolean }) => setEsAdmin(!!y.admin))
+      .catch(() => setEsAdmin(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/arca")
@@ -298,7 +307,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
       <header className="shrink-0 border-b border-zinc-200 bg-white">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6">
           <div className="mr-auto flex items-baseline gap-3">
-            <h1 className="text-[15px] font-semibold tracking-tight text-zinc-900">Facturas OCR</h1>
+            <h1 className="text-[15px] font-semibold tracking-tight text-zinc-900">Lector OCR</h1>
             {filas.length > 0 && (
               <p className="hidden text-xs tabular-nums text-zinc-500 sm:block" aria-live="polite">
                 {conDatos.length} con datos
@@ -363,6 +372,15 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
               </>
             )}
             <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
+            {esAdmin && (
+              <Link
+                href="/admin"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-zinc-700 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-900"
+              >
+                <Users className="size-4" />
+                <span className="hidden sm:inline">Usuarios</span>
+              </Link>
+            )}
             <UserButton />
           </div>
         </div>

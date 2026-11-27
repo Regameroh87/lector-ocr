@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Facturas OCR",
+  title: "Lector OCR",
   description: "Extracción de datos de facturas con verificación en ARCA",
 };
 

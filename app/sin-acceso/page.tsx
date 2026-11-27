@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SignOutButton } from "@clerk/nextjs";
 import { ShieldAlert } from "lucide-react";
 
-export const metadata: Metadata = { title: "Sin acceso · Facturas OCR" };
+export const metadata: Metadata = { title: "Sin acceso · Lector OCR" };
 
 export default function SinAcceso() {
   return (
