@@ -38,7 +38,7 @@ App web para extraer datos de facturas y otros documentos (PDF o imagen) y expor
 - `lib/validate.ts`: validación de CUIT/importes y `corregirCuitsConTexto`. `lib/qr.ts`: parseo del QR fiscal.
 - `lib/campos.ts`: campos personalizados (van en `factura.extras`). `lib/export.ts`: catálogo de columnas y `ConfigColumnas`.
 - `lib/plantillas.ts` (validación y textos, cliente y servidor), `lib/db/plantillas.ts` (consultas), `app/plantillas/` (pantallas y acciones).
-- `lib/arca/`: WSAA + WSCDC (constatación). Ver `docs/arca-certificado.md`.
+- `lib/arca/`: WSAA + WSCDC (constatación). El ticket de WSAA se comparte entre instancias en Neon (`arca_tickets`, `lib/arca/tickets-db.ts`): ARCA da uno solo vigente por certificado. Ver `docs/arca-certificado.md`.
 - `lib/auth/`: acceso. Orden: admin (`APP_ADMINS`) > bloqueado > habilitado (metadata de Clerk) > lista (`APP_EMAILS_PERMITIDOS`) > mail habilitado (invitación sin mail). `proxy.ts` filtra todo; `exigirAcceso()`, `exigirAdmin()` y `usuarioConAcceso()` son la segunda barrera.
 - `app/admin/`: panel de usuarios. `app/configuracion/`: preferencias guardadas en localStorage (`lib/client/preferencias.ts`).
 

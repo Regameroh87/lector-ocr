@@ -44,3 +44,17 @@ export const plantillas = pgTable(
 
 export type Plantilla = typeof plantillas.$inferSelect;
 export type NuevaPlantilla = typeof plantillas.$inferInsert;
+
+/**
+ * Ticket de acceso de ARCA (WSAA), compartido entre todas las instancias del servidor.
+ * ARCA entrega un solo ticket vigente (~12 h) por certificado y servicio: si cada instancia
+ * pidiera el suyo, la segunda recibiría "El CEE ya posee un TA válido".
+ */
+export const arcaTickets = pgTable("arca_tickets", {
+  /** "<entorno>:<cuit>:<servicio>", ej. "produccion:20123456789:wscdc" */
+  clave: text("clave").primaryKey(),
+  token: text("token").notNull(),
+  sign: text("sign").notNull(),
+  expira: timestamp("expira", { withTimezone: true }).notNull(),
+  actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
+});

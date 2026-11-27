@@ -8,6 +8,13 @@
       "when": 1795789027958,
       "tag": "0000_plantillas",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795805897430,
+      "tag": "0001_arca_tickets",
+      "breakpoints": true
     }
   ]
 }
