@@ -29,6 +29,18 @@ El registro, el ingreso, la verificación por mail y la recuperación de contras
 
 Para entrar con Google u otros proveedores, activalos en el dashboard de Clerk (User & authentication → SSO connections); no hace falta tocar el código.
 
+## Base de datos (Neon)
+
+Postgres en [Neon](https://neon.com) (plan gratis), conectado desde Vercel → *Storage*. El código usa [Drizzle](https://orm.drizzle.team): el esquema está en `lib/db/schema.ts` y las migraciones en `drizzle/`.
+
+```bash
+npm run db:generate   # después de cambiar lib/db/schema.ts: crea la migración
+npm run db:migrate    # aplica las migraciones pendientes a la base de DATABASE_URL
+npm run db:studio     # explorador visual de la base
+```
+
+Hoy guarda las **plantillas de extracción** (qué datos extraer y qué columnas exportar según el tipo de documento o el proveedor).
+
 ## Cambiar de modelo
 
 Todos los modelos están en `lib/models.ts`. Se elige desde la interfaz, y el valor por defecto se define con `DEFAULT_MODEL`.
@@ -77,6 +89,7 @@ lib/arca/                      WSAA (login) + WSCDC (constatación)
 lib/client/preprocess.ts       PDF→imagen y lectura del QR en el navegador
 lib/export.ts                  CSV y XLSX (columnas configurables)
 lib/auth/, proxy.ts            login con Clerk + whitelist de mails
+lib/db/, drizzle/              base de datos (Neon + Drizzle) y migraciones
 scripts/bench.ts               comparativa de modelos
 ```
 
