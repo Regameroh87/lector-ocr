@@ -22,7 +22,6 @@ import { paginasTxt, type Fila } from "./comun";
 import ListaDocumentos from "./ListaDocumentos";
 import Visor from "./Visor";
 import PanelDatos from "./PanelDatos";
-import PanelConfiguracion from "./PanelConfiguracion";
 import SelectorModelo from "./SelectorModelo";
 
 const CONCURRENCIA = 3;
@@ -49,12 +48,11 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   const [filas, setFilas] = useState<Fila[]>([]);
   const [seleccionada, setSeleccionada] = useState<string | null>(null);
   const [arrastrando, setArrastrando] = useState(false);
-  const [verPanel, setVerPanel] = useState(false);
-  const [verificarArca, setVerificarArca] = usePreferenciaBooleana("verificarArca", true);
-  const [extraerAuto, setExtraerAuto] = usePreferenciaBooleana("extraerAuto", false);
-  const [campos, setCampos] = usePreferenciaJson<CampoPersonalizado[]>("camposPersonalizados", SIN_CAMPOS, validarCampos);
+  const [verificarArca] = usePreferenciaBooleana("verificarArca", true);
+  const [extraerAuto] = usePreferenciaBooleana("extraerAuto", false);
+  const [campos] = usePreferenciaJson<CampoPersonalizado[]>("camposPersonalizados", SIN_CAMPOS, validarCampos);
   const camposActivos = campos.filter((c) => c.nombre.trim());
-  const [columnas, setColumnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
+  const [columnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
   const [servidorArca, setServidorArca] = useState<EstadoServidorArca | null>(null);
   const router = useRouter();
   const [esAdmin, setEsAdmin] = useState(false);
@@ -334,14 +332,13 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 Extraer pendientes ({pendientes.length})
               </button>
             )}
-            <button
-              onClick={() => setVerPanel((v) => !v)}
-              aria-expanded={verPanel}
-              className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] focus-visible:outline-2 focus-visible:outline-zinc-900 ${verPanel ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`}
+            <Link
+              href="/configuracion"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-zinc-700 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-900"
             >
               <Settings2 className="size-4" />
-              Configuración
-            </button>
+              <span className="hidden sm:inline">Configuración</span>
+            </Link>
             {filas.length > 0 && (
               <>
                 <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
@@ -390,20 +387,6 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
           </p>
         )}
       </header>
-
-      {verPanel && (
-        <PanelConfiguracion
-          verificarArca={verificarArca}
-          setVerificarArca={setVerificarArca}
-          extraerAuto={extraerAuto}
-          setExtraerAuto={setExtraerAuto}
-          servidor={servidorArca}
-          campos={campos}
-          setCampos={setCampos}
-          columnas={columnas}
-          setColumnas={setColumnas}
-        />
-      )}
 
       {filas.length === 0 ? (
         <EstadoVacio arrastrando={arrastrando} onAgregar={agregar} arcaActiva={arcaDisponible && verificarArca} extraerAuto={extraerAuto} />

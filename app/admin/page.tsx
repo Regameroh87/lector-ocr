@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { ArrowLeft, Mail, ShieldAlert } from "lucide-react";
+import { Mail, ShieldAlert } from "lucide-react";
+import EncabezadoPagina from "../ui/EncabezadoPagina";
 import { accesoDe, leerGuardado } from "@/lib/auth/acceso";
 import { leerAdmins, leerPermitidos, resolverAcceso, type OrigenAcceso } from "@/lib/auth/permitidos";
-import { BotonAccion, FormInvitar } from "./Controles";
+import { BotonAccion, CopiarLink, FormInvitar } from "./Controles";
 import { cambiarAcceso, revocarInvitacion } from "./acciones";
 
 export const metadata: Metadata = { title: "Usuarios · Lector OCR" };
@@ -13,18 +13,7 @@ export const metadata: Metadata = { title: "Usuarios · Lector OCR" };
 export default function Admin() {
   return (
     <div className="flex min-h-dvh flex-col bg-[#fbfbfa]">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5 sm:px-6">
-          <Link
-            href="/"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-zinc-700 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-900"
-          >
-            <ArrowLeft className="size-4" />
-            Volver
-          </Link>
-          <h1 className="text-[15px] font-semibold tracking-tight text-zinc-900">Usuarios</h1>
-        </div>
-      </header>
+      <EncabezadoPagina titulo="Usuarios" />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
         <Suspense fallback={<Cargando />}>
           <Panel />
@@ -107,7 +96,7 @@ async function Panel() {
       </Seccion>
 
       {invitaciones.length > 0 && (
-        <Seccion titulo={`Invitaciones pendientes (${invitaciones.length})`} descripcion="Todavía no se registraron.">
+        <Seccion titulo={`Invitaciones pendientes (${invitaciones.length})`} descripcion="Todavía no se registraron. Si el mail no les llegó (revisen spam), copiá el link y mandáselo por otro medio.">
           {invitaciones.map((i) => (
             <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
               <Mail className="size-4 shrink-0 text-zinc-400" />
@@ -115,6 +104,7 @@ async function Panel() {
                 <p className="truncate text-[13px] text-zinc-900">{i.emailAddress}</p>
                 <p className="text-xs text-zinc-500">Enviada el {fecha(i.createdAt)}</p>
               </div>
+              {i.url && <CopiarLink url={i.url} />}
               <form action={revocarInvitacion}>
                 <input type="hidden" name="invitacionId" value={i.id} />
                 <BotonAccion peligro>Cancelar</BotonAccion>

@@ -37,7 +37,7 @@ export async function invitar(_prev: EstadoInvitar, form: FormData): Promise<Est
       ignoreExisting: true,
     });
     refresh();
-    return { ok: true, mensaje: `Invitación enviada a ${email}. Cuando se registre va a tener acceso.` };
+    return { ok: true, mensaje: `Invitación enviada a ${email}. Si no le llega (que revise spam), copiá el link desde "Invitaciones pendientes".` };
   } catch (e) {
     return { ok: false, mensaje: mensajeDe(e) };
   }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, Send } from "lucide-react";
+import { Check, Link2, Loader2, Send } from "lucide-react";
 import { invitar, type EstadoInvitar } from "./acciones";
 
 const inicial: EstadoInvitar = { ok: null, mensaje: "" };
@@ -56,6 +56,29 @@ export function BotonAccion({ children, peligro }: { children: React.ReactNode; 
     >
       {pending && <Loader2 className="size-3 animate-spin" />}
       {children}
+    </button>
+  );
+}
+
+/** Copia el link de invitación: sirve si el mail de Clerk cae en spam o no llega. */
+export function CopiarLink({ url }: { url: string }) {
+  const [copiado, setCopiado] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopiado(true);
+          setTimeout(() => setCopiado(false), 2000);
+        } catch {
+          window.prompt("Copiá el link de invitación:", url);
+        }
+      }}
+      className="inline-flex h-7 items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 text-xs font-medium text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-900"
+    >
+      {copiado ? <Check className="size-3 text-emerald-700" /> : <Link2 className="size-3" />}
+      <span aria-live="polite">{copiado ? "Copiado" : "Copiar link"}</span>
     </button>
   );
 }

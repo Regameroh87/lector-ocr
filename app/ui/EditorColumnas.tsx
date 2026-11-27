@@ -37,13 +37,9 @@ export default function EditorColumnas({ config, onCambiar, extras }: {
   };
 
   return (
-    <div className="py-3 text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-zinc-900">Columnas del Excel y CSV</p>
-          <p className="mt-0.5 text-zinc-600">Elegí qué columnas salen y en qué orden. Los campos personalizados nuevos se suman al final.</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
+    <div className="text-sm">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs text-zinc-600">Atajos:</span>
           <button className={boton} onClick={() => guardar(COLUMNAS_BASICAS.filter((id) => todas.some((c) => c.id === id)))}>
             Básicas
           </button>
@@ -53,10 +49,9 @@ export default function EditorColumnas({ config, onCambiar, extras }: {
           <button className={boton} onClick={() => onCambiar(null)} disabled={!config}>
             Restablecer
           </button>
-        </div>
       </div>
 
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
+      <div className="mt-4 grid gap-5 md:grid-cols-2">
         <div>
           <p className="mb-1.5 text-xs font-medium text-zinc-600">
             En el archivo ({visibles.length}){visibles.length === 0 && <span className="text-red-700"> · elegí al menos una</span>}

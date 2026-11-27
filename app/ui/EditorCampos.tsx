@@ -40,15 +40,9 @@ export default function EditorCampos({ campos, onCambiar }: { campos: CampoPerso
   const sugerencias = SUGERENCIAS.filter((s) => !usados.has(s.nombre.toLowerCase()));
 
   return (
-    <div className="py-3 text-sm">
-      <p className="font-medium text-zinc-900">Campos personalizados</p>
-      <p className="mt-0.5 text-zinc-600">
-        Datos que querés además de los fijos (CUIT, importes, CAE…). Escribí el nombre como lo dirías vos; la descripción es opcional y sirve para
-        indicar formato o valores posibles. Aparecen en el detalle y como columnas en el CSV/Excel.
-      </p>
-
+    <div className="text-sm">
       {campos.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mb-3 space-y-2">
           {campos.map((c) => (
             <li key={c.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_6.5rem_auto]">
               <input
@@ -90,7 +84,7 @@ export default function EditorCampos({ campos, onCambiar }: { campos: CampoPerso
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <button
           onClick={() => agregar()}
           disabled={lleno}
