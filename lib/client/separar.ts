@@ -3,6 +3,7 @@
 import { parseQrFiscal } from "../qr";
 import { agrupar, combinarSenales, necesitaModelo, senalesDeTexto, type Segmentacion, type SenalesPagina } from "../segmentar";
 import { miniatura, type PaginaPdf } from "./preprocess";
+import { ajustarPeso } from "./comprimir";
 
 const TANDA = 20; // páginas por pedido a /api/segmentar
 const CONCURRENCIA = 2;
@@ -30,8 +31,10 @@ export async function separarPdf(paginas: PaginaPdf[], modelo: string, onProgres
     const procesar = async (tanda: number[]) => {
       const fd = new FormData();
       fd.set("modelo", modelo);
-      for (const i of tanda) fd.append("imagenes", await miniatura(paginas[i].imagen), `pagina-${i + 1}.jpg`);
+      const minis = await ajustarPeso(await Promise.all(tanda.map((i) => miniatura(paginas[i].imagen))));
+      minis.forEach((b, j) => fd.append("imagenes", b, `pagina-${tanda[j] + 1}.jpg`));
       const r = await fetch("/api/segmentar", { method: "POST", body: fd });
+      if (r.status === 413) throw new Error("las páginas pesan demasiado aun comprimidas");
       const json = await r.json();
       if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
       (json.senales as SenalesPagina[]).forEach((s, j) => (senales[tanda[j]] = combinarSenales(senales[tanda[j]], s)));

@@ -14,6 +14,7 @@ import { parseQrFiscal } from "@/lib/qr";
 import { plantillaPorCuit, type PlantillaCliente } from "@/lib/plantillas";
 import { esPdf, leerPdf, preprocesarImagen } from "@/lib/client/preprocess";
 import { paginasParaExtraer, separarPdf } from "@/lib/client/separar";
+import { ajustarPeso, LIMITE_PEDIDO } from "@/lib/client/comprimir";
 import { rangoPaginas } from "@/lib/segmentar";
 import { toCSV, toXLSX, type ConfigColumnas, type FilaExport } from "@/lib/export";
 import { usePreferenciaBooleana, usePreferenciaJson } from "@/lib/client/preferencias";
@@ -138,9 +139,13 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         if (plantilla)
           fd.set("plantilla", JSON.stringify({ nombre: plantilla.nombre, tipoDocumento: plantilla.tipoDocumento, descripcion: plantilla.descripcion, fiscal: plantilla.fiscal }));
         if (pedidos.length) fd.set("campos", JSON.stringify(pedidos.map(({ nombre, descripcion, tipo }) => ({ nombre, descripcion, tipo }))));
-        pre.imagenes.forEach((b, i) => fd.append("imagenes", b, `pagina-${i + 1}.jpg`));
+        // Si las páginas pasan el límite de Vercel (4,5 MB por pedido), se comprimen y se guardan así para las próximas veces.
+        const imagenes = await ajustarPeso(pre.imagenes, LIMITE_PEDIDO - new Blob([pre.texto ?? ""]).size);
+        if (imagenes !== pre.imagenes) preparados.current.set(id, { ...pre, imagenes });
+        imagenes.forEach((b, i) => fd.append("imagenes", b, `pagina-${i + 1}.jpg`));
         const r = await fetch("/api/extract", { method: "POST", body: fd });
         if (r.status === 401) router.push("/sign-in"); // la sesión venció
+        if (r.status === 413) throw new Error("El comprobante pesa demasiado aun comprimido (máx. 4,5 MB por envío). Probá subirlo en menos páginas o a menor resolución.");
         const json = await r.json();
         if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
         actualizar(id, { estado: "listo", res: json as RespuestaExtraccion, modeloEnCurso: undefined, plantillaUsada: plantilla ? { id: plantilla.id, nombre: plantilla.nombre } : null });
