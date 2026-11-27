@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Play, QrCode, RotateCcw, ShieldCheck, Loader2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, LayoutTemplate, Play, QrCode, RotateCcw, ShieldCheck, Loader2 } from "lucide-react";
+import type { PlantillaCliente } from "@/lib/plantillas";
 import type { ModeloConfig } from "@/lib/models";
 import SelectorModelo from "./SelectorModelo";
 import { Factura } from "@/lib/schema";
@@ -83,8 +84,17 @@ function parsear(raw: string, tipo: TipoCampo): { ok: true; v: string | number |
   return Number.isFinite(n) ? { ok: true, v: n } : { ok: false };
 }
 
-export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModelo, onExtraer, arcaDisponible, camposPedidos, onEditar, onReverificar }: {
+/** Selector de plantilla por comprobante. */
+export interface ControlPlantilla {
+  plantillas: PlantillaCliente[];
+  /** id de la plantilla que se va a usar, o null = sin plantilla */
+  elegida: string | null;
+  onElegir: (id: string | null) => void;
+}
+
+export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModelo, onExtraer, arcaDisponible, camposPedidos, plantilla, onEditar, onReverificar }: {
   fila: Fila;
+  plantilla: ControlPlantilla;
   modelos: ModeloConfig[];
   modeloElegido: string;
   onElegirModelo: (id: string) => void;
@@ -102,6 +112,8 @@ export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModel
       valor={modeloElegido}
       onChange={onElegirModelo}
       onExtraer={onExtraer}
+      plantilla={plantilla}
+      plantillaAuto={!!fila.plantillaAuto}
       texto={texto}
       primario={primario}
       deshabilitado={ocupado || fila.estado === "preparando"}
@@ -144,7 +156,7 @@ export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModel
             {fila.nota && <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-inset ring-amber-600/20">{fila.nota}</p>}
             {camposPedidos.length > 0 && (
               <p className="text-xs text-zinc-600">
-                <span className="font-medium text-zinc-800">Campos personalizados:</span> {camposPedidos.map((c) => c.nombre.trim()).join(", ")}.
+                <span className="font-medium text-zinc-800">Campos a extraer además de los fijos:</span> {camposPedidos.map((c) => c.nombre.trim()).join(", ")}.
               </p>
             )}
             {control("Extraer datos", true)}
@@ -212,6 +224,12 @@ export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModel
       <div className="space-y-4 border-b border-zinc-200 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <EstadoArcaBadge estado={res.arca.estado} />
+          {fila.plantillaUsada && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700" title="Plantilla usada en esta extracción">
+              <LayoutTemplate className="size-3" />
+              {fila.plantillaUsada.nombre}
+            </span>
+          )}
           {res.qr && (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20" title="Los datos principales se tomaron del QR fiscal de la factura">
               <QrCode className="size-3" />
@@ -326,7 +344,7 @@ export default function PanelDatos({ fila, modelos, modeloElegido, onElegirModel
           <p className="text-[13px] font-semibold text-zinc-900">Volver a extraer</p>
           {camposCambiaron && (
             <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-900 ring-1 ring-inset ring-amber-600/20">
-              Cambiaste los campos personalizados desde esta extracción. Volvé a extraer para obtenerlos.
+              Los campos a extraer cambiaron desde esta extracción (otra plantilla o configuración). Volvé a extraer para obtenerlos.
             </p>
           )}
           <p className="text-xs text-zinc-600">Probá otro modelo si algún dato quedó mal. Se reemplazan los datos y las correcciones manuales.</p>
@@ -460,8 +478,10 @@ function Campo({ def, factura, advertencias, onEditar, destacado }: {
   );
 }
 
-function ControlExtraccion({ modelos, valor, onChange, onExtraer, texto, primario, deshabilitado }: {
+function ControlExtraccion({ modelos, valor, onChange, onExtraer, plantilla, plantillaAuto, texto, primario, deshabilitado }: {
   modelos: ModeloConfig[];
+  plantilla: ControlPlantilla;
+  plantillaAuto: boolean;
   valor: string;
   onChange: (id: string) => void;
   onExtraer: () => void;
@@ -471,6 +491,24 @@ function ControlExtraccion({ modelos, valor, onChange, onExtraer, texto, primari
 }) {
   return (
     <div className="flex flex-col gap-2">
+      {plantilla.plantillas.length > 0 && (
+        <label className="block">
+          <span className="mb-1 flex items-baseline justify-between text-xs font-medium text-zinc-600">
+            Plantilla
+            {plantillaAuto && <span className="font-normal text-sky-700">elegida por el CUIT</span>}
+          </span>
+          <select
+            value={plantilla.elegida ?? ""}
+            onChange={(e) => plantilla.onElegir(e.target.value || null)}
+            className="h-9 w-full rounded-md border border-zinc-300 bg-white px-2 text-[13px] text-zinc-900 focus-visible:border-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/10"
+          >
+            <option value="">Sin plantilla (Configuración)</option>
+            {plantilla.plantillas.map((p) => (
+              <option key={p.id} value={p.id}>{p.nombre}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-zinc-600">Modelo</span>
         <SelectorModelo modelos={modelos} valor={valor} onChange={onChange} className="h-9 w-full" />

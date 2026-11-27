@@ -67,12 +67,12 @@ function instruccionesJsonSinSchema(schema: z.ZodType): string {
 export async function extraerFactura(
   imagenes: Imagen[],
   modeloId: string,
-  opciones: { model?: LanguageModel; campos?: CampoExtraido[]; texto?: string | null } = {},
+  opciones: { model?: LanguageModel; campos?: CampoExtraido[]; texto?: string | null; contexto?: string | null } = {},
 ): Promise<ResultadoExtraccion> {
   const cfg = getModeloConfig(modeloId);
   const campos = opciones.campos ?? [];
   const schema = campos.length ? Factura.extend({ extras: esquemaExtras(campos) }) : Factura;
-  const pedido = ["Extraé los datos de este comprobante.", instruccionesCampos(campos), instruccionesTexto(opciones.texto)].filter(Boolean).join("\n\n");
+  const pedido = ["Extraé los datos de este comprobante.", opciones.contexto ?? "", instruccionesCampos(campos), instruccionesTexto(opciones.texto)].filter(Boolean).join("\n\n");
   const model = opciones.model ?? getModel(cfg);
   const t0 = Date.now();
   let modo: "estricto" | "json" = cfg.structuredOutputs && !sinEsquemaEstricto.has(modeloId) ? "estricto" : "json";

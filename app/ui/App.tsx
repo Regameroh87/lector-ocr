@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileSpreadsheet, FileText, Play, Settings2, Trash2, Upload, Users } from "lucide-react";
+import { FileSpreadsheet, FileText, LayoutTemplate, Play, Settings2, Trash2, Upload, Users } from "lucide-react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import type { ModeloConfig } from "@/lib/models";
 import type { Factura } from "@/lib/schema";
 import type { RespuestaExtraccion, EstadoServidorArca } from "@/lib/types";
 import type { EstadoArca } from "@/lib/arca/verificar";
-import { validarFactura } from "@/lib/validate";
+import { cuitsEnTexto, validarFactura } from "@/lib/validate";
+import { parseQrFiscal } from "@/lib/qr";
+import { plantillaPorCuit, type PlantillaCliente } from "@/lib/plantillas";
 import { esPdf, leerPdf, preprocesarImagen } from "@/lib/client/preprocess";
 import { paginasParaExtraer, separarPdf } from "@/lib/client/separar";
 import { rangoPaginas } from "@/lib/segmentar";
@@ -26,6 +28,16 @@ import SelectorModelo from "./SelectorModelo";
 
 const CONCURRENCIA = 3;
 const SIN_CAMPOS: CampoPersonalizado[] = [];
+const validarId = (x: unknown) => (typeof x === "string" && x ? x : null);
+
+/** Plantilla que corresponde sola a un comprobante, por el CUIT del QR o los CUIT que aparecen en el PDF. */
+function detectarPlantilla(plantillas: PlantillaCliente[], pre: { qr: string | null; texto?: string | null }): PlantillaCliente | null {
+  const conCuit = plantillas.filter((p) => p.cuitsEmisor.length);
+  if (!conCuit.length) return null;
+  const qr = pre.qr ? parseQrFiscal(pre.qr) : null;
+  if (qr) return plantillaPorCuit(conCuit, [qr.cuit]);
+  return pre.texto ? plantillaPorCuit(conCuit, cuitsEnTexto(pre.texto)) : null;
+}
 const ACEPTA = /\.(pdf|jpe?g|png|webp|heic)$/i;
 
 type Pre = NonNullable<Fila["pre"]>;
@@ -53,18 +65,42 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   const [campos] = usePreferenciaJson<CampoPersonalizado[]>("camposPersonalizados", SIN_CAMPOS, validarCampos);
   const camposActivos = campos.filter((c) => c.nombre.trim());
   const [columnas] = usePreferenciaJson<ConfigColumnas | null>("columnasExport", null, validarConfigColumnas);
+  const [plantillas, setPlantillas] = useState<PlantillaCliente[]>([]);
+  const [plantillaGlobalId, setPlantillaGlobalId] = usePreferenciaJson<string | null>("plantilla", null, validarId);
+  const plantillaGlobal = plantillas.find((p) => p.id === plantillaGlobalId) ?? null;
+  /** Plantilla con la que se va a extraer este comprobante. */
+  const plantillaDe = (f: Pick<Fila, "plantillaId">) => (f.plantillaId === undefined ? plantillaGlobal : (plantillas.find((p) => p.id === f.plantillaId) ?? null));
   const [servidorArca, setServidorArca] = useState<EstadoServidorArca | null>(null);
   const router = useRouter();
   const [esAdmin, setEsAdmin] = useState(false);
 
   const activos = useRef(0);
-  const cola = useRef<{ id: string; modelo: string; arca: boolean }[]>([]);
+  const cola = useRef<{ id: string; modelo: string; arca: boolean; plantilla: PlantillaCliente | null }[]>([]);
   const preparados = useRef(new Map<string, Pre>());
   // Valores actuales para usar dentro de callbacks asíncronos
-  const actuales = useRef({ modelo, extraerAuto, verificarArca, campos: camposActivos });
+  const actuales = useRef({ modelo, extraerAuto, verificarArca, campos: camposActivos, plantillas, plantillaGlobal });
   useEffect(() => {
-    actuales.current = { modelo, extraerAuto, verificarArca, campos: camposActivos };
+    actuales.current = { modelo, extraerAuto, verificarArca, campos: camposActivos, plantillas, plantillaGlobal };
   });
+
+  useEffect(() => {
+    fetch("/api/plantillas")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((xs: PlantillaCliente[]) => {
+        const lista = Array.isArray(xs) ? xs : [];
+        setPlantillas(lista);
+        // Si las plantillas llegan después de leer los archivos, elegir igual la que corresponda por CUIT.
+        if (lista.length)
+          setFilas((fs) =>
+            fs.map((f) => {
+              if (f.plantillaId !== undefined || f.estado !== "esperando" || !f.pre) return f;
+              const p = detectarPlantilla(lista, f.pre);
+              return p ? { ...f, plantillaId: p.id, plantillaAuto: true } : f;
+            }),
+          );
+      })
+      .catch(() => setPlantillas([]));
+  }, []);
 
   useEffect(() => {
     fetch("/api/yo")
@@ -88,7 +124,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
 
   // --- Extracción (cola con concurrencia limitada) ---
   const extraer = useCallback(
-    async (id: string, modeloId: string, arca: boolean) => {
+    async (id: string, modeloId: string, arca: boolean, plantilla: PlantillaCliente | null) => {
       const pre = preparados.current.get(id);
       if (!pre) return;
       actualizar(id, { estado: "extrayendo", modeloEnCurso: modeloId, error: undefined });
@@ -98,14 +134,16 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         if (pre.qr) fd.set("qr", pre.qr);
         if (pre.texto) fd.set("texto", pre.texto);
         fd.set("arca", arca ? "1" : "0");
-        const pedidos = actuales.current.campos;
+        const pedidos = plantilla ? plantilla.campos : actuales.current.campos;
+        if (plantilla)
+          fd.set("plantilla", JSON.stringify({ nombre: plantilla.nombre, tipoDocumento: plantilla.tipoDocumento, descripcion: plantilla.descripcion, fiscal: plantilla.fiscal }));
         if (pedidos.length) fd.set("campos", JSON.stringify(pedidos.map(({ nombre, descripcion, tipo }) => ({ nombre, descripcion, tipo }))));
         pre.imagenes.forEach((b, i) => fd.append("imagenes", b, `pagina-${i + 1}.jpg`));
         const r = await fetch("/api/extract", { method: "POST", body: fd });
         if (r.status === 401) router.push("/sign-in"); // la sesión venció
         const json = await r.json();
         if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
-        actualizar(id, { estado: "listo", res: json as RespuestaExtraccion, modeloEnCurso: undefined });
+        actualizar(id, { estado: "listo", res: json as RespuestaExtraccion, modeloEnCurso: undefined, plantillaUsada: plantilla ? { id: plantilla.id, nombre: plantilla.nombre } : null });
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
         // Si ya había datos, se conservan y se muestra el error aparte.
@@ -119,7 +157,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
     const trabajador = async () => {
       while (cola.current.length) {
         const item = cola.current.shift()!;
-        await extraer(item.id, item.modelo, item.arca);
+        await extraer(item.id, item.modelo, item.arca, item.plantilla);
       }
     };
     while (activos.current < CONCURRENCIA && cola.current.length) {
@@ -132,7 +170,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
 
   /** Encola la extracción. `modeloPorId` permite un modelo distinto por comprobante. */
   const encolarExtraccion = useCallback(
-    (items: { id: string; modelo: string }[]) => {
+    (items: { id: string; modelo: string; plantilla: PlantillaCliente | null }[]) => {
       const arca = actuales.current.verificarArca;
       const nuevos = items.filter((x) => preparados.current.has(x.id) && !cola.current.some((c) => c.id === x.id));
       if (!nuevos.length) return;
@@ -156,8 +194,9 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         if (!esPdf(archivo)) {
           const pre = await preprocesarImagen(archivo);
           preparados.current.set(id, { imagenes: pre.imagenes, qr: pre.qr });
-          actualizar(id, { estado: "esperando", paginas: pre.paginas, pre: { imagenes: pre.imagenes, qr: pre.qr } });
-          if (actuales.current.extraerAuto) encolarExtraccion([{ id, modelo: actuales.current.modelo }]);
+          const auto = detectarPlantilla(actuales.current.plantillas, pre);
+          actualizar(id, { estado: "esperando", paginas: pre.paginas, pre: { imagenes: pre.imagenes, qr: pre.qr }, ...(auto && { plantillaId: auto.id, plantillaAuto: true }) });
+          if (actuales.current.extraerAuto) encolarExtraccion([{ id, modelo: actuales.current.modelo, plantilla: auto ?? actuales.current.plantillaGlobal }]);
           return;
         }
 
@@ -169,7 +208,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         if (!sep.grupos.length) throw new Error("No se encontraron comprobantes en el PDF");
 
         const varios = sep.grupos.length > 1;
-        const nuevas: Fila[] = sep.grupos.map((g, k) => {
+        const nuevas: Fila[] = sep.grupos.map((g, k): Fila => {
           const pags = g.map((i) => paginas[i]);
           const enviar = paginasParaExtraer(pags);
           const notas: string[] = [];
@@ -179,17 +218,20 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
           if (varios && dudosas.length) notas.push(`No se pudo confirmar que ${dudosas.length === 1 ? "la página" : "las páginas"} ${rangoPaginas(dudosas)} sean de este comprobante.`);
           if (pags.length > enviar.length) notas.push(`El comprobante tiene ${pags.length} páginas; al modelo se envían las primeras ${enviar.length - 2} y las últimas 2.`);
           if (sep.aviso) notas.push(sep.aviso);
+          const pre = {
+            imagenes: enviar.map((p) => p.imagen),
+            qr: pags.find((p) => p.qr)?.qr ?? null,
+            texto: pags.map((p) => p.texto.trim()).filter(Boolean).join("\n\n") || null,
+          };
+          const auto = detectarPlantilla(actuales.current.plantillas, pre);
           return {
             id: k === 0 ? id : crypto.randomUUID(),
+            ...(auto && { plantillaId: auto.id, plantillaAuto: true }),
             archivo,
             original,
             estado: "esperando",
             paginas: pags.map((p) => p.url),
-            pre: {
-              imagenes: enviar.map((p) => p.imagen),
-              qr: pags.find((p) => p.qr)?.qr ?? null,
-              texto: pags.map((p) => p.texto.trim()).filter(Boolean).join("\n\n") || null,
-            },
+            pre,
             paginasOrigen: varios ? g : undefined,
             nota: notas.join(" ") || undefined,
             costoSeparacion: k === 0 && sep.costoUsd ? sep.costoUsd : undefined,
@@ -197,7 +239,10 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
         });
         for (const n of nuevas) preparados.current.set(n.id, n.pre!);
         setFilas((fs) => fs.flatMap((f) => (f.id === id ? nuevas : [f])));
-        if (actuales.current.extraerAuto) encolarExtraccion(nuevas.map((n) => ({ id: n.id, modelo: actuales.current.modelo })));
+        if (actuales.current.extraerAuto) {
+          const { plantillas: ps, plantillaGlobal: global } = actuales.current;
+          encolarExtraccion(nuevas.map((n) => ({ id: n.id, modelo: actuales.current.modelo, plantilla: n.plantillaId ? (ps.find((p) => p.id === n.plantillaId) ?? null) : global })));
+        }
       } catch (e) {
         actualizar(id, { estado: "error", progreso: undefined, error: e instanceof Error ? e.message : String(e) });
       }
@@ -218,11 +263,11 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
   /** Extraer (o volver a extraer) un comprobante con el modelo elegido para él. */
   const extraerUno = (fila: Fila) => {
     if (!preparados.current.has(fila.id)) return preparar(fila.id, fila.archivo, fila.original);
-    encolarExtraccion([{ id: fila.id, modelo: modeloDe(fila) }]);
+    encolarExtraccion([{ id: fila.id, modelo: modeloDe(fila), plantilla: plantillaDe(fila) }]);
   };
 
   const pendientes = filas.filter((f) => f.estado === "esperando");
-  const extraerPendientes = () => encolarExtraccion(pendientes.map((f) => ({ id: f.id, modelo: modeloDe(f) })));
+  const extraerPendientes = () => encolarExtraccion(pendientes.map((f) => ({ id: f.id, modelo: modeloDe(f), plantilla: plantillaDe(f) })));
 
   const limpiar = () => {
     for (const f of filas) {
@@ -280,6 +325,12 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
     arca: f.res!.arca,
     costoUsd: f.res!.uso.costoUsd,
   }));
+  // Columnas del archivo: las de la plantilla si todos los comprobantes se extrajeron con la misma; si no, las de Configuración.
+  const usadas = new Set(conDatos.map((f) => f.plantillaUsada?.id ?? null));
+  const unica = usadas.size === 1 ? [...usadas][0] : undefined;
+  const plantillaExport = unica ? (plantillas.find((p) => p.id === unica) ?? null) : null;
+  const columnasExport = plantillaExport ? plantillaExport.columnas : columnas;
+  const prefijo = plantillaExport ? plantillaExport.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "plantilla" : "facturas";
   const costoTotal = filas.reduce((s, f) => s + (f.res?.uso.costoUsd ?? 0) + (f.costoSeparacion ?? 0), 0);
   const enCurso = filas.filter((f) => f.estado === "en_cola" || f.estado === "extrayendo" || f.estado === "preparando").length;
   const conError = filas.filter((f) => f.estado === "error").length;
@@ -317,6 +368,23 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
             )}
           </div>
 
+          {plantillas.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <span className="sr-only sm:not-sr-only">Plantilla</span>
+              <select
+                value={plantillaGlobal?.id ?? ""}
+                onChange={(e) => setPlantillaGlobalId(e.target.value || null)}
+                title="Se aplica a los comprobantes que no tengan una plantilla propia (elegida a mano o por CUIT)"
+                className="h-8 max-w-[200px] rounded-md border border-zinc-300 bg-white px-2 text-[13px] text-zinc-900 focus-visible:border-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/10"
+              >
+                <option value="">Sin plantilla</option>
+                {plantillas.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label className="flex items-center gap-2 text-xs text-zinc-600">
             <span className="sr-only sm:not-sr-only">Modelo</span>
             <SelectorModelo modelos={modelos} valor={modelo} onChange={setModelo} className="max-w-[240px]" />
@@ -333,6 +401,13 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
               </button>
             )}
             <Link
+              href="/plantillas"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-zinc-700 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-900"
+            >
+              <LayoutTemplate className="size-4" />
+              <span className="hidden sm:inline">Plantillas</span>
+            </Link>
+            <Link
               href="/configuracion"
               className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-zinc-700 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-900"
             >
@@ -344,7 +419,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
                 <button
                   disabled={!conDatos.length}
-                  onClick={() => descargar(`facturas-${hoy()}.csv`, toCSV(exportables, columnas), "text/csv;charset=utf-8")}
+                  onClick={() => descargar(`${prefijo}-${hoy()}.csv`, toCSV(exportables, columnasExport), "text/csv;charset=utf-8")}
                   className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-2.5 text-[13px] text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-900 disabled:opacity-40"
                 >
                   <FileText className="size-4" />
@@ -352,7 +427,7 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 </button>
                 <button
                   disabled={!conDatos.length}
-                  onClick={async () => descargar(`facturas-${hoy()}.xlsx`, await toXLSX(exportables, columnas), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+                  onClick={async () => descargar(`${prefijo}-${hoy()}.xlsx`, await toXLSX(exportables, columnasExport), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
                   className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-zinc-300 bg-white px-2.5 text-[13px] text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-900 disabled:opacity-40"
                 >
                   <FileSpreadsheet className="size-4" />
@@ -406,7 +481,12 @@ export default function App({ modelos, modeloInicial }: { modelos: ModeloConfig[
                 onElegirModelo={(m) => actualizar(actual.id, { modelo: m })}
                 onExtraer={() => extraerUno(actual)}
                 arcaDisponible={arcaDisponible}
-                camposPedidos={camposActivos}
+                camposPedidos={plantillaDe(actual)?.campos ?? camposActivos}
+                plantilla={{
+                  plantillas,
+                  elegida: plantillaDe(actual)?.id ?? null,
+                  onElegir: (pid) => actualizar(actual.id, { plantillaId: pid, plantillaAuto: false }),
+                }}
                 onEditar={(f) => editar(actual.id, f)}
                 onReverificar={() => reverificar(actual.id)}
               />

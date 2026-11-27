@@ -32,6 +32,12 @@ export interface Fila {
   nota?: string;
   /** Costo de identificar los comprobantes con el modelo (PDFs escaneados con varios). */
   costoSeparacion?: number;
+  /** Plantilla elegida para este comprobante: id, null = ninguna, undefined = la elegida arriba. */
+  plantillaId?: string | null;
+  /** La plantilla se eligió sola por el CUIT del proveedor. */
+  plantillaAuto?: boolean;
+  /** Plantilla con la que se hizo la última extracción. */
+  plantillaUsada?: { id: string; nombre: string } | null;
 }
 
 /** Nombre para mostrar: "lote.pdf · págs. 3-4" si salió de un PDF con varios comprobantes. */

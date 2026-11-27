@@ -75,3 +75,12 @@ export async function exigirAdmin(): Promise<string> {
   if (!userId || !(await accesoDe(userId)).admin) throw new Error("Solo los administradores pueden hacer esto");
   return userId;
 }
+
+/** Para páginas y acciones: quién es y si es admin; lanza si no tiene acceso. */
+export async function usuarioConAcceso(): Promise<{ userId: string; admin: boolean }> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Sesión vencida: volvé a iniciar sesión");
+  const a = await accesoDe(userId);
+  if (!a.permitido) throw new Error("Tu cuenta no tiene acceso a esta app");
+  return { userId, admin: a.admin };
+}
