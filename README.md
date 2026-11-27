@@ -25,7 +25,7 @@ El registro, el ingreso, la verificación por mail y la recuperación de contras
 2. Definí quién puede usar la app en `APP_EMAILS_PERMITIDOS`: mails completos y/o dominios con `@` (ej. `ana@estudio.com,@miempresa.com.ar`). Cualquiera puede registrarse, pero quien no esté en la lista ve "Tu cuenta todavía no tiene acceso".
 3. Solo cuentan los mails **verificados**. Los cambios en la lista tardan hasta 5 minutos en aplicarse a una sesión abierta.
 
-**Panel de usuarios (`/admin`):** los mails de `APP_ADMINS` ven el botón "Usuarios" arriba a la derecha. Desde ahí se invita a alguien por mail, se da acceso a quien se registró y está esperando, o se le quita a alguien. Ese estado se guarda en Clerk (metadata pública del usuario), así que no hace falta base de datos ni reiniciar la app. Prioridad: admin > bloqueado en el panel > habilitado en el panel > `APP_EMAILS_PERMITIDOS` > invitación.
+**Panel de usuarios (`/admin`):** los mails de `APP_ADMINS` ven el botón "Usuarios" arriba a la derecha. Desde ahí se habilita un mail (si todavía no se registró, entra directo cuando lo haga; no se manda ningún mail), se da acceso a quien se registró y está esperando, o se le quita a alguien. Ese estado se guarda en Clerk (metadata pública del usuario), así que no hace falta base de datos ni reiniciar la app. Prioridad: admin > bloqueado en el panel > habilitado en el panel > `APP_EMAILS_PERMITIDOS` > mail habilitado antes de registrarse.
 
 Para entrar con Google u otros proveedores, activalos en el dashboard de Clerk (User & authentication → SSO connections); no hace falta tocar el código.
 

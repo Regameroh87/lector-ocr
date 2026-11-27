@@ -27,7 +27,7 @@ const ORIGEN: Record<OrigenAcceso, { txt: string; cls: string; ayuda: string }> 
   admin: { txt: "Admin", cls: "bg-zinc-900 text-white ring-zinc-900", ayuda: "Definido en APP_ADMINS" },
   habilitado: { txt: "Con acceso", cls: "bg-emerald-50 text-emerald-800 ring-emerald-600/20", ayuda: "Habilitado desde este panel" },
   lista: { txt: "Con acceso", cls: "bg-emerald-50 text-emerald-800 ring-emerald-600/20", ayuda: "Por la lista APP_EMAILS_PERMITIDOS" },
-  invitado: { txt: "Con acceso", cls: "bg-emerald-50 text-emerald-800 ring-emerald-600/20", ayuda: "Tiene una invitación" },
+  invitado: { txt: "Con acceso", cls: "bg-emerald-50 text-emerald-800 ring-emerald-600/20", ayuda: "Su mail fue habilitado desde este panel" },
   bloqueado: { txt: "Bloqueado", cls: "bg-red-50 text-red-800 ring-red-600/20", ayuda: "Se le quitó el acceso desde este panel" },
   sin_acceso: { txt: "Esperando acceso", cls: "bg-amber-50 text-amber-800 ring-amber-600/20", ayuda: "Se registró pero nadie lo habilitó" },
 };
@@ -74,7 +74,7 @@ async function Panel() {
       <section className="rounded-xl bg-white p-4 ring-1 ring-zinc-200 sm:p-5">
         <h2 className="text-sm font-semibold text-zinc-900">Dar acceso a alguien</h2>
         <p className="mb-3 mt-0.5 text-sm text-zinc-600">
-          Si ya tiene cuenta, se habilita al instante. Si no, le llega un mail de invitación para registrarse.
+          Si ya tiene cuenta, se habilita al instante. Si no, queda habilitado: cuando se registre con ese mail (con Google o con contraseña), entra directo.
         </p>
         <FormInvitar />
       </section>
@@ -96,18 +96,18 @@ async function Panel() {
       </Seccion>
 
       {invitaciones.length > 0 && (
-        <Seccion titulo={`Invitaciones pendientes (${invitaciones.length})`} descripcion="Todavía no se registraron. Si el mail no les llegó (revisen spam), copiá el link y mandáselo por otro medio.">
+        <Seccion titulo={`Habilitados que todavía no se registraron (${invitaciones.length})`} descripcion="Van a tener acceso apenas se registren con ese mail. El link opcional abre el registro con el mail ya cargado.">
           {invitaciones.map((i) => (
             <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
               <Mail className="size-4 shrink-0 text-zinc-400" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] text-zinc-900">{i.emailAddress}</p>
-                <p className="text-xs text-zinc-500">Enviada el {fecha(i.createdAt)}</p>
+                <p className="text-xs text-zinc-500">Habilitado el {fecha(i.createdAt)}</p>
               </div>
               {i.url && <CopiarLink url={i.url} />}
               <form action={revocarInvitacion}>
                 <input type="hidden" name="invitacionId" value={i.id} />
-                <BotonAccion peligro>Cancelar</BotonAccion>
+                <BotonAccion peligro>Quitar</BotonAccion>
               </form>
             </li>
           ))}

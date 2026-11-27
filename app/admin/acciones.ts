@@ -12,7 +12,7 @@ export interface EstadoInvitar {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Habilita un mail: si ya tiene cuenta, le da acceso; si no, le manda una invitación por mail. */
+/** Habilita un mail: si ya tiene cuenta, le da acceso; si no, lo deja habilitado para cuando se registre (sin mandar mails). */
 export async function invitar(_prev: EstadoInvitar, form: FormData): Promise<EstadoInvitar> {
   try {
     await exigirAdmin();
@@ -28,16 +28,24 @@ export async function invitar(_prev: EstadoInvitar, form: FormData): Promise<Est
       return { ok: true, mensaje: `${email} ya tenía cuenta: ahora tiene acceso.` };
     }
 
+    // Sin mail: la invitación queda como "mail habilitado". Cuando esa persona se registre
+    // por su cuenta (Google o mail y contraseña) con ese mail, entra directo.
     const h = await headers();
     const origen = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
-    await clerk.invitations.createInvitation({
+    const params = {
       emailAddress: email,
-      publicMetadata: { acceso: "habilitado" },
+      publicMetadata: { acceso: "habilitado" as const },
       redirectUrl: `${origen}/sign-up`,
       ignoreExisting: true,
-    });
+      notify: false,
+    };
+    try {
+      await clerk.invitations.createInvitation({ ...params, expiresInDays: 365 });
+    } catch {
+      await clerk.invitations.createInvitation(params); // si el plan no permite 365 días, usa el vencimiento por defecto
+    }
     refresh();
-    return { ok: true, mensaje: `Invitación enviada a ${email}. Si no le llega (que revise spam), copiá el link desde "Invitaciones pendientes".` };
+    return { ok: true, mensaje: `${email} quedó habilitado. Pedile que se registre en ${origen} con ese mail (puede usar Google).` };
   } catch (e) {
     return { ok: false, mensaje: mensajeDe(e) };
   }

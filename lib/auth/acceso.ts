@@ -40,6 +40,11 @@ export async function accesoDe(userId: string): Promise<Acceso> {
   // Solo se consultan invitaciones si nada más le da acceso (evita llamadas de más).
   let r = resolverAcceso({ emails, guardado, invitado: false }, lista, admins);
   if (!r.permitido && r.origen === "sin_acceso" && emails.length) r = resolverAcceso({ emails, guardado, invitado: await tieneInvitacion(emails) }, lista, admins);
+  // Primer ingreso de un mail habilitado: se guarda en el usuario, así no depende de que la invitación siga vigente.
+  if (r.origen === "invitado") {
+    await (await clerkClient()).users.updateUserMetadata(userId, { publicMetadata: { acceso: "habilitado" } }).catch(() => {});
+    r = { permitido: true, origen: "habilitado" };
+  }
   const valor: Acceso = { ...r, admin: esAdmin(emails, admins), emails };
   cache.set(userId, { valor, hasta: Date.now() + CACHE_MS });
   return valor;
